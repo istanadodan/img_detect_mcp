@@ -38,6 +38,7 @@ def test_detection_model_invalid_confidence() -> None:
             class_name="dog",
             confidence=1.5,  # Out of range
             bbox=[0.0, 0.0, 1.0, 1.0],
+            embedding=None,
         )
 
 

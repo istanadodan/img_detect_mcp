@@ -2,13 +2,14 @@
 
 ## 프로젝트 개요
 
-FastAPI 기반의 Model Context Protocol (MCP) 서버로, YOLOv8 객체 감지와 외부 임베딩 API를 통합합니다.
+YOLOv8 이미지 분석 기능을 제공하는 Model Context Protocol (MCP) 서버입니다. Claude와 같은 AI 에이전트가 이미지를 분석하고 임베딩할 수 있도록 합니다.
 
 **핵심 기능:**
 - YOLOv8을 이용한 이미지 객체 감지
-- 감지된 객체 crop 및 base64 인코딩
+- 감지된 객체 자동 crop 및 base64 인코딩
 - 외부 임베딩 서버(192.168.0.100:7997)를 통한 벡터 임베딩
-- MCP 프로토콜 준수 (FastAPI SSE + StreamableHTTP)
+- MCP 프로토콜 준수 (StdIO 기반 전송)
+- FastAPI 제공 (헬스 체크, 모니터링 용도)
 
 ---
 
@@ -44,15 +45,21 @@ MCP_SERVER_NAME=mcp-api-server
 uv sync
 ```
 
-### 서버 실행 (개발 모드)
+### MCP 서버 실행
 ```bash
+# StdIO 기반 MCP 서버 (Claude 등의 클라이언트에서 사용)
+uv run python -m mcp_api_server.mcp_cli
+```
+
+### FastAPI HTTP 서버 실행 (옵션)
+```bash
+# 모니터링/헬스 체크용 HTTP 서버 (독립적으로 사용 가능)
 uv run uvicorn src.mcp_api_server.main:app --reload
 ```
 
-**접속:**
-- 서버: http://localhost:8000
-- Health 체크: http://localhost:8000/health
-- MCP 엔드포인트: http://localhost:8000/mcp
+**HTTP 접속:**
+- 헬스 체크: http://localhost:8000/health
+- 서버 정보: http://localhost:8000/info
 
 ### 테스트 실행
 ```bash
@@ -255,7 +262,22 @@ async def get_prompt(name: str, arguments: dict[str, str] | None = None) -> GetP
 ### 파일 구조
 
 - 각 기능은 별도 파일로 분리: `tools/`, `resources/`, `prompts/`
-- `__init__.py`에서 등록 함수를 import하여 활성화
+- MCP 서버 인스턴스는 `server.py`에서 관리
+- Tool 등록은 decorator로 자동 처리
+
+**동작 흐름:**
+
+```
+mcp_cli.py (진입점)
+  └─> register_tools() 호출
+      └─> tools 모듈 import
+          └─> 각 tool 파일의 @mcp_server.call_tool() 데코레이터 실행
+              └─> Tool 등록 완료
+  └─> stdio_server() 시작
+      └─> StdIO를 통해 MCP 클라이언트와 통신
+```
+
+**코드 예시:**
 
 ```python
 # tools/__init__.py
@@ -263,8 +285,17 @@ from .image_analysis import register_image_analysis_tool
 __all__ = ["register_image_analysis_tool"]
 
 # server.py
-def register_tools():
+async def register_tools() -> None:
+    """Register all MCP tools by importing tool modules."""
     from . import tools  # noqa: F401
+
+# mcp_cli.py
+async def main() -> None:
+    """Run MCP server with stdio transport."""
+    from .server import mcp_server, register_tools
+    await register_tools()
+    async with stdio_server(mcp_server) as streams:
+        await streams.keep_alive()
 ```
 
 ---

@@ -197,22 +197,44 @@ print(result.model_dump_json(indent=2))
 # 헬스 체크
 GET /health
 응답: {"status": "ok"}
+
+# 서버 정보
+GET /info
+응답: {
+  "name": "mcp-api-server",
+  "version": "0.1.0",
+  "protocol": "MCP (Model Context Protocol)",
+  "transport": "stdio",
+  "description": "YOLOv8-based image analysis with embedding integration"
+}
 ```
 
-### MCP 프로토콜 엔드포인트
+### MCP 프로토콜 (StdIO 기반)
 
-MCP는 Server-Sent Events (SSE) 기반으로 작동합니다.
+MCP 서버는 **표준 입출력(StdIO)** 기반으로 작동합니다. 이는 Claude 에이전트나 MCP Inspector와 직접 통신합니다.
+
+**실행 방법:**
 
 ```bash
-# MCP SSE 연결
-GET /mcp/sse
-
-# MCP 메시지 전송
-POST /mcp/messages
-Content-Type: application/json
+# MCP 서버 실행 (Claude나 다른 MCP 클라이언트에서 호출)
+uv run python -m mcp_api_server.mcp_cli
 ```
 
-MCP 클라이언트 (Claude, MCP Inspector 등)를 통해 `analyze_image` tool을 호출할 수 있습니다.
+**Claude에서 설정 예시 (Claude.app 설정):**
+
+```json
+{
+  "mcpServers": {
+    "mcp-api-server": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "mcp_api_server.mcp_cli"],
+      "cwd": "/path/to/mcp-api-server"
+    }
+  }
+}
+```
+
+MCP 클라이언트는 StdIO를 통해 `analyze_image` tool을 호출할 수 있습니다.
 
 ---
 
