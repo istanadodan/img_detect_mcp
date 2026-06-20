@@ -3,6 +3,7 @@
 import base64
 import io
 import json
+import logging
 
 import httpx
 from mcp.types import TextContent, Tool
@@ -10,8 +11,11 @@ from PIL import Image
 from ultralytics import YOLO
 
 from ..config import settings
+from ..logging_config import get_logger
 from ..models import AnalysisResult, Detection
 from ..server import mcp_server
+
+logger = get_logger(__name__)
 
 # Global YOLO model instance (lazy loaded)
 _yolo_model: YOLO | None = None
@@ -21,7 +25,9 @@ def _get_yolo_model() -> YOLO:
     """Load YOLOv8 model (lazy loading)."""
     global _yolo_model
     if _yolo_model is None:
+        logger.info(f"Loading YOLOv8 model: {settings.yolo_model}")
         _yolo_model = YOLO(settings.yolo_model)
+        logger.info(f"YOLOv8 model loaded successfully")
     return _yolo_model
 
 
@@ -39,6 +45,7 @@ async def _get_embedding(image_base64: str) -> list[float]:
         httpx.HTTPError: If embedding API call fails
         json.JSONDecodeError: If response is invalid JSON
     """
+    logger.debug(f"Requesting embedding from {settings.embedding_host}")
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"{settings.embedding_host}/embeddings",
@@ -52,6 +59,7 @@ async def _get_embedding(image_base64: str) -> list[float]:
         data = response.json()
 
     embedding: list[float] = data["data"][0]["embedding"]
+    logger.debug(f"Embedding obtained: {len(embedding)} dimensions")
     return embedding
 
 
@@ -89,13 +97,20 @@ async def analyze_image_impl(
     Returns:
         AnalysisResult containing list of detections with embeddings
     """
+    logger.info("Starting image analysis")
     # Decode image
-    image_bytes = base64.b64decode(image_base64)
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    try:
+        image_bytes = base64.b64decode(image_base64)
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        logger.debug(f"Image decoded: {image.size}")
+    except Exception as e:
+        logger.error(f"Failed to decode image: {e}")
+        raise
 
     # Run YOLOv8
     model = _get_yolo_model()
     conf = conf_threshold if conf_threshold is not None else settings.yolo_conf_threshold
+    logger.debug(f"Running YOLOv8 detection with confidence threshold: {conf}")
     results = model.predict(image, conf=conf, verbose=False)
 
     detections: list[Detection] = []
@@ -103,12 +118,15 @@ async def analyze_image_impl(
     if results and len(results) > 0:
         result = results[0]
         boxes = result.boxes
+        logger.info(f"Detected {len(boxes)} objects")
 
-        for box in boxes:
+        for i, box in enumerate(boxes):
             class_id = int(box.cls[0])
             class_name = str(model.names[class_id])
             confidence = float(box.conf[0])
             bbox = box.xyxy[0].tolist()
+
+            logger.debug(f"Object {i+1}: {class_name} (confidence: {confidence:.2f})")
 
             # Crop and embed
             crop_b64 = _crop_image_to_base64(image, bbox)
@@ -116,9 +134,9 @@ async def analyze_image_impl(
             embedding: list[float] | None = None
             try:
                 embedding = await _get_embedding(crop_b64)
-            except Exception:
+            except Exception as e:
                 # If embedding fails, include null and continue
-                pass
+                logger.warning(f"Failed to get embedding for {class_name}: {e}")
 
             detection = Detection(
                 class_name=class_name,
@@ -127,8 +145,11 @@ async def analyze_image_impl(
                 embedding=embedding,
             )
             detections.append(detection)
+    else:
+        logger.info("No objects detected in image")
 
     result = AnalysisResult(detections=detections, total_objects=len(detections))
+    logger.info(f"Image analysis complete: {len(detections)} detections")
     return result
 
 
@@ -147,6 +168,7 @@ async def analyze_image(
     Returns:
         MCP TextContent with JSON array of detections
     """
+    logger.info("analyze_image tool called")
     result = await analyze_image_impl(image_base64, conf_threshold)
     return TextContent(type="text", text=result.model_dump_json())
 
@@ -154,6 +176,7 @@ async def analyze_image(
 @mcp_server.list_tools()
 async def list_tools() -> list[Tool]:
     """List available tools."""
+    logger.debug("list_tools called")
     return [
         Tool(
             name="analyze_image",

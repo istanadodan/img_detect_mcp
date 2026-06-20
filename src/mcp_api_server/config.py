@@ -1,21 +1,37 @@
 """Configuration management using Pydantic Settings."""
 
-from pydantic_settings import BaseSettings
+import logging
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
 
     embedding_host: str = "http://192.168.0.100:7997"
     embedding_model: str = "openai/clip-vit-large-patch14"
     yolo_model: str = "yolov8n.pt"
     yolo_conf_threshold: float = 0.5
     mcp_server_name: str = "mcp-api-server"
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    log_level: str = "INFO"
 
 
 settings = Settings()
+
+# Log configuration after loading
+_logger = logging.getLogger(__name__)
+if Path(".env").exists():
+    _logger.debug("Configuration loaded from .env file")
+else:
+    _logger.debug("Configuration loaded from environment variables")
+
+_logger.debug(f"Embedding server: {settings.embedding_host}")
+_logger.debug(f"YOLOv8 model: {settings.yolo_model}")
+_logger.debug(f"Confidence threshold: {settings.yolo_conf_threshold}")
