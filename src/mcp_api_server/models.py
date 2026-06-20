@@ -1,10 +1,21 @@
 """Pydantic data models for type safety and validation."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Detection(BaseModel):
     """Single object detection result."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "class_name": "person",
+                "confidence": 0.91,
+                "bbox": [100.0, 50.0, 200.0, 300.0],
+                "embedding": [0.12, -0.34, 0.56],
+            }
+        }
+    )
 
     class_name: str = Field(..., description="Detected object class name")
     confidence: float = Field(
@@ -22,32 +33,12 @@ class Detection(BaseModel):
         description="Embedding vector from external API (None if failed)",
     )
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "class_name": "person",
-                "confidence": 0.91,
-                "bbox": [100.0, 50.0, 200.0, 300.0],
-                "embedding": [0.12, -0.34, 0.56],
-            }
-        }
-
 
 class AnalysisResult(BaseModel):
     """Complete image analysis result."""
 
-    detections: list[Detection] = Field(
-        ...,
-        description="List of detected objects",
-    )
-    total_objects: int = Field(
-        ...,
-        ge=0,
-        description="Total number of detections",
-    )
-
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "detections": [
                     {
@@ -60,3 +51,14 @@ class AnalysisResult(BaseModel):
                 "total_objects": 1,
             }
         }
+    )
+
+    detections: list[Detection] = Field(
+        ...,
+        description="List of detected objects",
+    )
+    total_objects: int = Field(
+        ...,
+        ge=0,
+        description="Total number of detections",
+    )
