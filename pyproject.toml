@@ -2,7 +2,7 @@
 name = "mcp-api-server"
 version = "0.1.0"
 description = "FastAPI-based MCP server with YOLOv8 image analysis and embedding integration"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 authors = [{name = "Michael", email = "pjy16@etners.com"}]
 readme = "README.md"
 license = {text = "MIT"}
@@ -43,7 +43,7 @@ asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]

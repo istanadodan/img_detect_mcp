@@ -12,7 +12,7 @@ FastAPI-based MCP server with YOLOv8 image analysis and embedding integration.
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.13.3+
 - `uv` package manager ([install](https://docs.astral.sh/uv/getting-started/installation/))
 
 ### Setup
