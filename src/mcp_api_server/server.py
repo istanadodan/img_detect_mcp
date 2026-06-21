@@ -1,6 +1,5 @@
 """MCP Server instance definition."""
 
-import logging
 
 from mcp.server import Server
 
@@ -10,13 +9,13 @@ from .logging_config import get_logger
 logger = get_logger(__name__)
 
 # Create MCP server instance
-mcp_server = Server(settings.mcp_server_name)
-logger.info(f"MCP server '{settings.mcp_server_name}' created")
+mcp_server = Server(settings.mcp_server_name, version="0.1.0")
+logger.info(f"MCP server '{settings.mcp_server_name}' (v0.1.0) created")
 
 
 async def register_tools() -> None:
     """Register all MCP tools by importing tool modules."""
     logger.info("Registering MCP tools...")
-    # Import modules to trigger tool registration decorators
-    from . import tools  # noqa: F401
+    from .tools import register_image_analysis_tool
+    register_image_analysis_tool()
     logger.info("MCP tools registered successfully")

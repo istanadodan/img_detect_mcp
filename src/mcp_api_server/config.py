@@ -2,7 +2,6 @@
 
 import logging
 from pathlib import Path
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,11 +12,13 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        arbitrary_types_allowed=True,
     )
 
     embedding_host: str = "http://192.168.0.100:7997"
     embedding_model: str = "openai/clip-vit-large-patch14"
     yolo_model: str = "yolov8n.pt"
+    yolo_home: str = "./src/mcp_api_server/models"
     yolo_conf_threshold: float = 0.5
     mcp_server_name: str = "mcp-api-server"
     log_level: str = "INFO"

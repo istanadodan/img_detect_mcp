@@ -39,25 +39,37 @@ uv sync
 
 ### 2단계: 환경 설정
 
+프로젝트 루트에 `.env` 파일을 생성합니다:
+
 ```bash
 # .env 파일 생성
-cp .env.example .env
-```
-
-`.env` 파일에서 설정 가능한 옵션:
-
-```env
+cat > .env << EOF
 # 임베딩 서버 설정
 EMBEDDING_HOST=http://192.168.0.100:7997
 EMBEDDING_MODEL=openai/clip-vit-large-patch14
 
 # YOLOv8 모델 설정
-YOLO_MODEL=yolov8n.pt               # nano (빠름) ~ yolov8x.pt (정확도 높음)
-YOLO_CONF_THRESHOLD=0.5             # 신뢰도 임계값
+YOLO_MODEL=yolov8n.pt
+YOLO_HOME=./src/mcp_api_server/models
+YOLO_CONF_THRESHOLD=0.5
 
 # MCP 서버 설정
 MCP_SERVER_NAME=mcp-api-server
+LOG_LEVEL=INFO
+EOF
 ```
+
+**설정 항목 설명:**
+
+| 항목 | 기본값 | 설명 |
+|------|--------|------|
+| `EMBEDDING_HOST` | `http://192.168.0.100:7997` | 임베딩 서버 주소 |
+| `EMBEDDING_MODEL` | `openai/clip-vit-large-patch14` | 사용할 임베딩 모델 |
+| `YOLO_MODEL` | `yolov8n.pt` | YOLOv8 모델 (nano~x) |
+| `YOLO_HOME` | `./src/mcp_api_server/models` | 모델 다운로드 디렉토리 (프로젝트 루트 기준 상대경로) |
+| `YOLO_CONF_THRESHOLD` | `0.5` | 감지 신뢰도 임계값 (0~1) |
+| `MCP_SERVER_NAME` | `mcp-api-server` | MCP 서버 이름 |
+| `LOG_LEVEL` | `INFO` | 로그 레벨 (DEBUG/INFO/WARNING) |
 
 **YOLOv8 모델 선택 가이드:**
 - `yolov8n.pt` (nano): 가장 빠름, 메모리 적음, 정확도 낮음
@@ -101,10 +113,12 @@ mcp-api-server/
 │   └── mcp_api_server/             # 메인 패키지
 │       │
 │       ├── __init__.py             # 패키지 초기화
-│       ├── main.py                 # FastAPI 진입점 + MCP 라우터
+│       ├── main.py                 # FastAPI 진입점 (HTTP/SSE/WebSocket)
+│       ├── mcp_cli.py              # MCP StdIO CLI 진입점
 │       ├── server.py               # MCP 서버 인스턴스
 │       ├── config.py               # 환경변수 설정 (Pydantic)
 │       ├── models.py               # Pydantic 데이터 모델
+│       ├── logging_config.py       # 로깅 설정
 │       │
 │       ├── tools/                  # MCP Tool 구현
 │       │   ├── __init__.py
@@ -115,6 +129,10 @@ mcp-api-server/
 │       │
 │       └── prompts/                # MCP Prompt 구현 (선택)
 │           └── __init__.py
+│
+├── examples/                       # 클라이언트 예제
+│   ├── http_client.py              # HTTP/JSON-RPC 클라이언트 예제
+│   └── websocket_client.py         # WebSocket 클라이언트 예제
 │
 └── tests/                          # 테스트 스위트
     ├── __init__.py
@@ -129,14 +147,14 @@ mcp-api-server/
 
 ### `analyze_image` MCP Tool
 
-이미지를 base64 형식으로 입력받아 객체를 감지하고 임베딩합니다.
+이미지 파일 경로를 입력받아 객체를 감지하고 임베딩을 추출합니다.
 
 **입력 파라미터:**
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---------|------|------|------|
-| `image_base64` | string | ✅ | Base64 인코딩된 이미지 (PNG/JPEG) |
-| `conf_threshold` | float | ❌ | 감지 신뢰도 임계값 (0~1) |
+| `image_path` | string | ✅ | 이미지 파일의 절대 경로 (PNG/JPEG) |
+| `conf_threshold` | float | ❌ | 감지 신뢰도 임계값 (0~1, 기본값: 0.5) |
 
 **사용 예:**
 
@@ -144,9 +162,9 @@ mcp-api-server/
 from src.mcp_api_server.tools.image_analysis import analyze_image_impl
 import asyncio
 
-# Base64 이미지를 prepare하고 분석
+# 이미지 파일 경로로 분석
 result = await analyze_image_impl(
-    image_base64="iVBORw0KGgoAAAANS...",
+    image_path="/path/to/image.jpg",
     conf_threshold=0.5
 )
 
@@ -177,21 +195,27 @@ print(result.model_dump_json(indent=2))
 
 **처리 흐름:**
 
-1. Base64 문자열 → 바이너리 디코딩
-2. PIL Image로 변환 (RGB)
-3. YOLOv8 모델로 객체 감지
+1. 파일 경로 → PIL Image 로드 (RGB 변환)
+2. 이미지를 1024×1024 해상도로 리사이징 (LANCZOS 필터)
+3. YOLOv8 모델로 객체 감지 (리사이징된 이미지 사용)
 4. 각 객체에 대해:
    - Bounding box 추출
-   - 해당 영역 crop
-   - Crop 이미지 PNG로 저장 후 base64 재인코딩
-   - 임베딩 서버 API 호출
+   - 해당 영역을 리사이징된 이미지에서 crop
+   - Crop 이미지 → PNG → base64 인코딩
+   - 임베딩 서버 API 호출 (`/embeddings`)
+   - 임베딩 벡터 추출
 5. 결과 JSON 반환
+
+**주요 특징:**
+- 파일 경로 기반 입력으로 메모리 효율 향상
+- 자동 리사이징으로 일관된 처리 품질
+- 임베딩 API 실패 시 기본 영벡터(모두 0) 사용으로 견고성 제공
 
 ---
 
 ## API 엔드포인트
 
-### FastAPI HTTP 엔드포인트
+### 헬스 체크 및 서버 정보
 
 ```bash
 # 헬스 체크
@@ -204,23 +228,98 @@ GET /info
   "name": "mcp-api-server",
   "version": "0.1.0",
   "protocol": "MCP (Model Context Protocol)",
-  "transport": "stdio",
+  "transport": "HTTP/SSE and WebSocket",
   "description": "YOLOv8-based image analysis with embedding integration"
 }
 ```
 
+### MCP HTTP/JSON-RPC 엔드포인트 (네트워크 기반)
+
+**엔드포인트:** `POST /mcp/messages`
+
+FastAPI를 통한 HTTP 기반 MCP 서버로, 네트워크를 통해 원격에서 접근 가능합니다.
+
+**특징:**
+- JSON-RPC 2.0 프로토콜 준수
+- 네트워크 기반 통신 (원격 배포 가능)
+- 비동기 처리
+- 별도 노드에서 실행 가능
+
+**사용 예 (Python):**
+
+```python
+import asyncio
+import httpx
+
+async def call_mcp_tool():
+    async with httpx.AsyncClient() as client:
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "analyze_image",
+                "arguments": {
+                    "image_path": "/absolute/path/to/image.jpg",  # 절대 경로
+                    "conf_threshold": 0.5
+                }
+            }
+        }
+        response = await client.post(
+            "http://localhost:8000/mcp/messages",
+            json=payload
+        )
+        print(response.json())
+
+asyncio.run(call_mcp_tool())
+```
+
+**이용 가능한 메서드:**
+- `initialize` - 서버 초기화
+- `tools/list` - 사용 가능한 tool 목록 조회
+- `tools/call` - 특정 tool 호출
+
+### MCP WebSocket 엔드포인트
+
+**엔드포인트:** `WS /mcp/ws`
+
+저지연, 양방향 통신이 필요한 경우 WebSocket 사용:
+
+```python
+import asyncio
+import json
+import websockets
+
+async def ws_client():
+    async with websockets.connect("ws://localhost:8000/mcp/ws") as ws:
+        # 초기화 요청
+        await ws.send(json.dumps({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {}
+        }))
+        response = await ws.recv()
+        print(f"초기화 응답: {response}")
+
+asyncio.run(ws_client())
+```
+
+**장점:**
+- 지속적인 연결 (latency 낮음)
+- 양방향 통신
+- 스트리밍 응답에 유리
+
 ### MCP 프로토콜 (StdIO 기반)
 
-MCP 서버는 **표준 입출력(StdIO)** 기반으로 작동합니다. 이는 Claude 에이전트나 MCP Inspector와 직접 통신합니다.
-
-**실행 방법:**
+**로컬 사용:** Claude.app이나 다른 MCP 클라이언트에서 직접 사용
 
 ```bash
-# MCP 서버 실행 (Claude나 다른 MCP 클라이언트에서 호출)
+# StdIO 기반 MCP 서버 실행
 uv run python -m mcp_api_server.mcp_cli
 ```
 
-**Claude에서 설정 예시 (Claude.app 설정):**
+**Claude에서 설정 (Claude.app):**
 
 ```json
 {
@@ -228,13 +327,23 @@ uv run python -m mcp_api_server.mcp_cli
     "mcp-api-server": {
       "command": "uv",
       "args": ["run", "python", "-m", "mcp_api_server.mcp_cli"],
-      "cwd": "/path/to/mcp-api-server"
+      "cwd": "D:\works\ai-projects\mcp-api-server\"
     }
   }
 }
 ```
 
-MCP 클라이언트는 StdIO를 통해 `analyze_image` tool을 호출할 수 있습니다.
+### 예제 클라이언트
+
+`examples/` 디렉토리에 완전한 클라이언트 예제가 있습니다:
+
+```bash
+# HTTP 클라이언트 예제 실행
+uv run python examples/http_client.py
+
+# WebSocket 클라이언트 예제 실행
+uv run python examples/websocket_client.py
+```
 
 ---
 
@@ -321,13 +430,22 @@ EMBEDDING_HOST=http://192.168.0.100:8080
 
 ### YOLOv8 모델이 자동으로 다운로드되지 않음
 
-첫 실행 시 모델이 `~/.cache/ultralytics/` 디렉토리에 자동 다운로드됩니다.
+첫 실행 시 모델이 `.env`에 설정된 `YOLO_HOME` 디렉토리에 자동 다운로드됩니다.
+기본값은 프로젝트 루트의 `./models/` 디렉토리입니다.
 
 **해결:**
 ```bash
 # 수동으로 모델 다운로드
-python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+YOLO_HOME=./models python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+
+# 또는 서버 실행 (자동 다운로드)
+uv run uvicorn src.mcp_api_server.main:app
 ```
+
+**모델 저장 위치:**
+- 설정: `.env` 파일의 `YOLO_HOME=./src/mcp_api_server/models`
+- 실제 경로: `프로젝트_루트/src/mcp_api_server/models/`
+- `.gitignore`에 등록되어 있음 (커밋 제외)
 
 ### 임베딩 API 타임아웃 오류
 
