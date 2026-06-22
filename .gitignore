@@ -37,12 +37,8 @@ env/
 *~
 .DS_Store
 
-# Environment
-.env
-.env.local
-.env.*.local
-
 # Models (YOLOv8, etc.)
+**/models/
 *.pt
 *.pth
 runs/
@@ -53,8 +49,18 @@ weights/
 .coverage
 htmlcov/
 .tox/
+test*
+tests/
 
 # Misc
 *.log
 *.tmp
 logs/
+*.gt
+.ruff_cache
+/examples
+.gitignore
+
+# claude
+.claude
+CLAUDE.md

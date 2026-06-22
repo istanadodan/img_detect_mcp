@@ -1,7 +1,7 @@
 """Tests for FastAPI server and health endpoint."""
 
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 from src.mcp_api_server.main import app
 

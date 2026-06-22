@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 import httpx
-from mcp.types import Tool
+from mcp.types import TextContent, Tool
 from PIL import Image
 from ultralytics import YOLO
 
@@ -190,7 +190,7 @@ async def analyze_image_impl(
     return result
 
 
-async def analyze_image(name: str, arguments: dict) -> str:
+async def analyze_image(name: str, arguments: dict) -> list[TextContent]:
     """
     Analyze an image using YOLOv8 and embed detected objects.
 
@@ -199,7 +199,7 @@ async def analyze_image(name: str, arguments: dict) -> str:
         conf_threshold: Detection confidence threshold (0-1, optional)
 
     Returns:
-        JSON string with detection results
+        List containing TextContent with JSON detection results
     """
     if name != "analyze_image":
         logger.error(f"Unexpected tool name: {name}")
@@ -212,7 +212,10 @@ async def analyze_image(name: str, arguments: dict) -> str:
 
     logger.info(f"analyze_image tool called. path={image_path}")
     result = await analyze_image_impl(image_path, conf_threshold)
-    return result.model_dump_json()
+    response = [TextContent(type="text", text=result.model_dump_json())]
+    logger.info(f"analyze_image returning: type={type(response)}, len={len(response)}")
+    logger.debug(f"Response content type: {type(response[0])}")
+    return response
 
 
 async def list_tools() -> list[Tool]:
