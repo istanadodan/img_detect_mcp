@@ -39,9 +39,16 @@ YOLO_CONF_THRESHOLD=0.5
 
 # MCP 서버
 MCP_SERVER_NAME=mcp-api-server
+MCP_SERVER_TYPE=sdk
+
+# 로깅
 LOG_LEVEL=INFO
 EOF
 ```
+
+**MCP_SERVER_TYPE 옵션:**
+- `sdk` (기본): MCP SDK 기반 (더 많은 기능, 복잡도 높음)
+- `fastmcp`: FastMCP 기반 (간단하고 가벼움)
 
 ---
 
@@ -54,14 +61,22 @@ uv sync
 
 ### MCP 서버 실행 (3가지 방식)
 
-**1. StdIO 기반 (로컬 MCP 클라이언트용)**
-```bash
-uv run python -m mcp_api_server.mcp_cli
-```
-- Claude.app에서 직접 사용
-- 표준 입출력(stdin/stdout) 통신
+**1. StdIO 기반 (로컬 MCP 클라이언트용) - 2가지 구현**
 
-**2. HTTP/JSON-RPC 기반 (네트워크 기반, 권장)**
+MCP SDK 방식 (기본값, 권장):
+```bash
+uv run python -m mcp_api_server
+```
+
+FastMCP 방식 (더 간단):
+```bash
+MCP_SERVER_TYPE=fastmcp uv run python -m mcp_api_server
+```
+- Claude Desktop에서 직접 사용
+- 표준 입출력(stdin/stdout) 통신
+- MCP_SERVER_TYPE: `sdk` (기본) 또는 `fastmcp`
+
+**2. HTTP/JSON-RPC 기반 (네트워크 기반)**
 ```bash
 # FastAPI 개발 모드
 uv run uvicorn src.mcp_api_server.main:app --reload

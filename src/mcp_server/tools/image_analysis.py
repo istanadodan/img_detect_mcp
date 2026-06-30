@@ -4,16 +4,13 @@ import base64
 import io
 import os
 from pathlib import Path
-
 import httpx
 from mcp.types import TextContent, Tool
 from PIL import Image
 from ultralytics import YOLO
-
-from ..config import settings
-from ..logging_config import get_logger
-from ..models import AnalysisResult, Detection
-from ..server import mcp_server
+from mcp_server.settings import settings
+from mcp_server.utils.logging_config import get_logger
+from mcp_server.schemas.models import AnalysisResult, Detection
 
 logger = get_logger(__name__)
 
@@ -248,15 +245,3 @@ async def list_tools() -> list[Tool]:
             },
         ),
     ]
-
-
-def register_image_analysis_tool() -> None:
-    """Register image analysis tool handlers."""
-    # Pre-load YOLOv8 model during tool registration
-    logger.info("Pre-loading YOLOv8 model...")
-    _get_yolo_model()
-
-    # Register tool handlers explicitly
-    mcp_server.call_tool()(analyze_image)  # type: ignore
-    mcp_server.list_tools()(list_tools)  # type: ignore
-    logger.info("Image analysis tool registered")

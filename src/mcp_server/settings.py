@@ -4,6 +4,9 @@ import logging
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Log configuration after loading
+_logger = logging.getLogger(__name__)
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -18,16 +21,21 @@ class Settings(BaseSettings):
     embedding_host: str = "http://192.168.0.100:7997"
     embedding_model: str = "openai/clip-vit-large-patch14"
     yolo_model: str = "yolov8n.pt"
-    yolo_home: str = "./src/mcp_api_server/models"
+    yolo_home: str = "./models"
     yolo_conf_threshold: float = 0.5
     mcp_server_name: str = "mcp-api-server"
     log_level: str = "INFO"
+    mcp_server_type: str = "fastmcp"  # "sdk" or "fastmcp"
+
+    @staticmethod
+    def get_project_root() -> Path:
+        """Get project root directory."""
+        return Path(__file__).parent.parent.parent
 
 
 settings = Settings()
 
-# Log configuration after loading
-_logger = logging.getLogger(__name__)
+
 if Path(".env").exists():
     _logger.debug("Configuration loaded from .env file")
 else:

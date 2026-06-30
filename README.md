@@ -78,6 +78,18 @@ EOF
 
 ### 3단계: 서버 실행
 
+**MCP StdIO 서버 (Claude Desktop 연결용):**
+
+```bash
+# MCP SDK 방식 (기본값, 권장)
+uv run python -m mcp_api_server
+
+# 또는 FastMCP 방식
+MCP_SERVER_TYPE=fastmcp uv run python -m mcp_api_server
+```
+
+**FastAPI HTTP/WebSocket 서버 (원격 클라이언트용):**
+
 ```bash
 # 개발 모드 (자동 리로드 활성화)
 uv run uvicorn src.mcp_api_server.main:app --reload
@@ -87,9 +99,8 @@ uv run uvicorn src.mcp_api_server.main:app --workers 4
 ```
 
 **서버 시작 확인:**
-- 터미널에서 `Uvicorn running on http://127.0.0.1:8000` 메시지 확인
-- 브라우저에서 `http://localhost:8000/health` 접속
-- 응답: `{"status": "ok"}`
+- MCP StdIO: 터미널에서 로그 메시지 확인
+- FastAPI HTTP: 브라우저에서 `http://localhost:8000/health` 접속 → `{"status": "ok"}`
 
 ---
 

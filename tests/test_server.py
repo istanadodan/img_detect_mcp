@@ -3,7 +3,7 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.mcp_api_server.main import app
+from mcp_server.web_server import app
 
 
 @pytest.mark.asyncio

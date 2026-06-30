@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.mcp_api_server.models import AnalysisResult, Detection
+from mcp_server.schemas.models import AnalysisResult, Detection
 
 
 def test_detection_model_valid() -> None:
